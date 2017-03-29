@@ -14,7 +14,7 @@ local function add_spat_conv_block(model, input_size)
   if not layer.padding then layer.padding = {0,0} end -- if no padding presized then no padding
   
   -- ADDING ASKED LAYERS
-  print(input_size)
+  --print(input_size)
   model:add(nn.SpatialConvolution(
     input_size[2], layer.outPlanes, 
     layer.ker_size[1], layer.ker_size[2],    -- size of the convolutional kernel 
@@ -69,11 +69,12 @@ local function weights_init(m)
    end
 end
 
-function initialize_model(architecture, input_size)
+function initialize_model(architecture)
   if model then model = nil end
+  local input_size = architecture[1]
   local model = nn.Sequential()
   local prev_layer_type = 'none'
-  for idx = 1, table.getn(architecture) do
+  for idx = 2, table.getn(architecture) do
     layer = architecture[idx]
     if layer.type == 'conv2D' then 
       model = add_spat_conv_block(model, input_size); input_size = get_output_size(input_size); prev_layer_type = 'conv' 
@@ -90,7 +91,10 @@ function initialize_model(architecture, input_size)
   model:apply(weights_init)
   return model 
 end
-      
+
+
+--[[
+Examples:
 
 local arch1 = {
   {type = 'conv2D', outPlanes = 64, ker_size = {3,3}, padding = {1, 1}, bn = true, dropout = 0.3, act = nn.ReLU(), pooling = {module = nn.SpatialMaxPooling, params = {2, 2, 2, 2}}},
@@ -104,3 +108,4 @@ local arch2 = {
   {type = 'lin', out_size = 256, act = nn.ReLU()},
   {type = 'lin', out_size = 10, act = nn.LogSoftMax()}
 }
+--]]

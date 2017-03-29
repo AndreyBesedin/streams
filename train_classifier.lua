@@ -1,6 +1,8 @@
 require 'xlua'
 require 'optim'
 require 'nn'
+require 'cudnn'
+require 'cunn'
 require 'lfs'
 require 'posix.stdlib'
 dofile 'data/data_preparation/get_data.lua'
@@ -9,14 +11,15 @@ local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
 opt = {
-  cuda = true,
+  type = 'cuda',
   root = posix.stdlib.getenv('ROOT_FOLDER') or '/home/abesedin/workspace/Projects/streams/',
-  noise_size = {100, 100, 1, 1}
-  ngf = 64, -- nb of convolutional filters in the first generative layer
-  ndf = 64,
   dataset = 'mnist',
-  batch_size = 100,
-  channels = 3
+  batchSize = 100,
+  channels = 3,
+  save = 'logs/',
+  max_epoch = 100,
+  epoch_step = 5,
+  learningRate = 0.001
 }
 
 dofile(opt.root .. 'data/data_preparation/get_data.lua')
@@ -25,45 +28,27 @@ opt.manualSeed = torch.random(1, 10000)
 torch.manualSeed(opt.manualSeed)
 torch.setnumthreads(1)
 torch.setdefaulttensortype('torch.FloatTensor')
-local data_loader = load_data(opt.dataset)
-opt.data_size = data_loader.train_data.data:size()
+local provider = {}
+provider.trainData = torch.load('data/cifar10/generated_data/gen_data.t7')
+provider.testData = torch.load('data/cifar10/original_data/t7/test.t7')
+
+opt.data_size = provider.trainData.data:size()
 opt.channels = opt.data_size[2]
 
 print(opt)
+local architectures = {}
 
-local ngf = opt.ngf
-local ndf = opt.ndf
-local nz = opt.noise_size[2] 
-local nc = opt.channels
-
-local architectures = {
-  gModel = {
-    {opt.batch_size, opt.nz, 1, 1}, --Size for the model input
-    {type = 'conv2D_full', outPlanes = ngf*8, ker_size = {4,4}, bn = true, act = nn.ReLU()},
-    {type = 'conv2D_full', outPlanes = ngf*4, ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.ReLU()},
-    {type = 'conv2D_full', outPlanes = ngf*2, ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.ReLU()},
-    {type = 'conv2D_full', outPlanes = ngf,   ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.ReLU()},
-    {type = 'conv2D_full', outPlanes = nc,    ker_size = {4,4}, step = {2, 2}, padding = {1,1}, act = nn.Tanh(), pooling = {module = nn.SpatialAveragePooling, params = {2, 2, 2, 2}}}
-  },
-  dModel = {
-    opt.data_size,
-    {type = 'conv2D', outPlanes = ndf,   ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.LeakyReLU(0.2, true)},
-    {type = 'conv2D', outPlanes = ndf*2, ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.LeakyReLU(0.2, true)},
-    {type = 'conv2D', outPlanes = ndf*4, ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.LeakyReLU(0.2, true)},
-    {type = 'conv2D', outPlanes = ndf*8, ker_size = {4,4}, step = {2, 2}, padding = {1,1}, bn = true, act = nn.LeakyReLU(0.2, true)},
-    {type = 'conv2D', outPlanes = 1,     ker_size = {4,4}, act = nn.Sigmoid(), view = true}  
-  },
-  cModel = { --Classification architecture
-    opt.data_size,
-    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
-    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {nn.SpatialMaxPooling, params = {2,2,2,2}}},
-    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {nn.SpatialMaxPooling, params = {4,4,4,4}}, dropout = 0.4},
-    {type = 'lin', out_size = 10}
-  }
+architectures.cModel = { --Classification architecture
+  opt.data_size,
+  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
+  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {4,4,4,4}}, dropout = 0.4},
+  {type = 'lin', act = nn.ReLU(true),   out_size = 256},
+  {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
 }
 
 local function cast(t)
-   if opt.cuda == true then
+   if opt.type == 'cuda' then
       require 'cudnn'
       return t:cuda()
    else
@@ -72,18 +57,19 @@ local function cast(t)
 end
 
 print(c.blue '==>' ..' configuring model')
-local data = load_data(opt.dataset)
-local input_size = data.train_data.data:size(); input_size[1] = opt.batch_size
 
-
-local model = initialize_model(arch, input_size)
+local model = cast(initialize_model(architectures.cModel))
 print(model)
-
 print(c.blue '==>' ..' loading data')
-provider = torch.load 'provider.t7'
 provider.trainData.data = provider.trainData.data:float()
 provider.testData.data = provider.testData.data:float()
+provider.trainData.labels = provider.trainData.labels:float()
+provider.testData.labels = provider.testData.labels:float()
 
+-- provider.trainData.data = provider.trainData.data:cuda()
+-- provider.testData.data = provider.testData.data:cuda()
+-- provider.trainData.data = provider.trainData.labels:cuda()
+-- provider.testData.data = provider.testData.labels:cuda()
 confusion = optim.ConfusionMatrix(10)
 
 print('Will save at '..opt.save)
@@ -96,8 +82,7 @@ parameters,gradParameters = model:getParameters()
 
 
 print(c.blue'==>' ..' setting criterion')
-criterion = cast(nn.CrossEntropyCriterion())
-
+criterion = cast(nn.ClassNLLCriterion())
 
 print(c.blue'==>' ..' configuring optimizer')
 optimState = {
@@ -117,7 +102,7 @@ function train()
   
   print(c.blue '==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
 
-  local targets = cast(torch.FloatTensor(opt.batchSize))
+  local targets = cast(torch.zeros(opt.batchSize))
   local indices = torch.randperm(provider.trainData.data:size(1)):long():split(opt.batchSize)
   -- remove last element so that all the batches have equal size
   indices[#indices] = nil
@@ -125,32 +110,25 @@ function train()
   local tic = torch.tic()
   for t,v in ipairs(indices) do
     xlua.progress(t, #indices)
-
-    local inputs = provider.trainData.data:index(1,v)
+    local inputs = cast(provider.trainData.data:index(1,v))
     targets:copy(provider.trainData.labels:index(1,v))
-
     local feval = function(x)
       if x ~= parameters then parameters:copy(x) end
       gradParameters:zero()
-      
       local outputs = model:forward(inputs)
       local f = criterion:forward(outputs, targets)
       local df_do = criterion:backward(outputs, targets)
       model:backward(inputs, df_do)
-
       confusion:batchAdd(outputs, targets)
 
       return f,gradParameters
     end
-    optim.sgd(feval, parameters, optimState)
+    optim.adam(feval, parameters, optimState)
   end
-
   confusion:updateValids()
   print(('Train accuracy: '..c.cyan'%.2f'..' %%\t time: %.2f s'):format(
         confusion.totalValid * 100, torch.toc(tic)))
-
   train_acc = confusion.totalValid * 100
-
   confusion:zero()
   epoch = epoch + 1
 end
@@ -162,8 +140,8 @@ function test()
   print(c.blue '==>'.." testing")
   local bs = 125
   for i=1,provider.testData.data:size(1),bs do
-    local outputs = model:forward(provider.testData.data:narrow(1,i,bs))
-    confusion:batchAdd(outputs, provider.testData.labels:narrow(1,i,bs))
+    local outputs = model:forward(cast(provider.testData.data:narrow(1,i,bs)))
+    confusion:batchAdd(outputs, cast(provider.testData.labels:narrow(1,i,bs)))
   end
 
   confusion:updateValids()
@@ -217,7 +195,8 @@ function test()
   confusion:zero()
 end
 
-
+print('Model type: ' .. model:type())
+print('Data type: ' .. model:type())
 for i=1,opt.max_epoch do
   train()
   test()

@@ -2,8 +2,10 @@ require 'cunn'
 require 'image'
 require 'lfs'
 require 'xlua'
+require 'cudnn'
 manualSeed = torch.random(1, 5000)
 torch.manualSeed(manualSeed)
+
 
 --[[
 GENERATOR: noise[nb_samples, 100, 1, 1] --G--> images[nb_samples, nb_channels, h, w] --> save(data/dataset_name/generated_data/train.t7 and probably /validate.t7)
@@ -15,7 +17,7 @@ local function get_labels(dataset)
   local labels = {}
   assert(dataset=='mnist' or dataset=='cifar10', 'Unknown dataset, please make sure you typed it right')
   if dataset == 'cifar10' then
-    labels = {bird = 1, airplane = 2, automobile = 3, cat = 4, dog = 5, truck = 6, frog = 7, horse = 8, deer = 9, ship = 10} 
+    labels = {airplane = 1, automobile = 2, bird = 3, cat = 4, deer = 5, dog = 6, frog = 7, horse = 8, ship = 9, truck = 10} 
   elseif dataset == 'mnist' then
     labels = {zero = 1, one = 2, two = 3, three = 4, four = 5, five = 6, six = 7, seven = 8, eight = 9, nine = 10}
   end
@@ -23,7 +25,6 @@ local function get_labels(dataset)
 end
 
 local function generate_from_model(model_file, nb_samples)
-  if not cudnn then require 'cudnn' end
   local noise = torch.randn(nb_samples, 100, 1, 1):normal():cuda()
   local net = torch.load(model_file)
   local res = net:forward(noise):float()
@@ -31,9 +32,10 @@ local function generate_from_model(model_file, nb_samples)
   return res1
 end
 
-function generate_from_models_set(dataset, samples_per_model, data_location)
-  local model_folder = '/home/abesedin/workspace/Projects/streams/models/pretrained_generative_models/' .. dataset .. '/'
-  if not cudnn then require 'cudnn' end
+function generate_from_models_set(dataset, samples_per_model)
+  local model_folder = '/home/abesedin/workspace/Projects/streams/models/trained_gen_models/' .. dataset .. '/'
+  local save_to = '/home/abesedin/workspace/Projects/streams/data/' .. dataset .. '/generated_data/'
+  os.execute('mkdir ' .. save_to)
   local models = {}; local nb_models = 0
   for file_ in lfs.dir(model_folder) do
     if string.find(file_,".t7") then models[nb_models+1] = file_; nb_models = nb_models + 1 end
@@ -47,7 +49,7 @@ function generate_from_models_set(dataset, samples_per_model, data_location)
   batch.labels = torch.zeros(samples_per_model*nb_models):float()
   local mbatch_size = 1000; local nb_s_batches = math.ceil(samples_per_model/mbatch_size)
   for idx = 1, nb_models do
-    print('Generating data from ' .. models[idx])
+    print('Generating data from ' .. models[idx] .. '; assigning label ' .. labels[models[idx]:sub(1,-4)])
     local filename =  model_folder .. models[idx]
     local _start = (idx-1)*samples_per_model+1; local _end = idx*samples_per_model
     for idx_data = 1, nb_s_batches do
@@ -57,7 +59,7 @@ function generate_from_models_set(dataset, samples_per_model, data_location)
     end
   end
   --batch.data = 255*(batch.data-batch.data:min())/(batch.data:max()-batch.data:min())
+  torch.save(save_to .. 'gen_data.t7', batch)
   return batch
-  --torch.save('generated_data/data_batch_' .. idx .. '.t7', batch)
 end
    
