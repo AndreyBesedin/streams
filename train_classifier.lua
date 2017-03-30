@@ -168,7 +168,7 @@ function test()
   
   confusion:updateValids()
   print('Test accuracy:', confusion.totalValid * 100)
-  
+  testLogger = nil
   if testLogger then
     paths.mkdir(opt.save)
     testLogger:add{train_acc, confusion.totalValid * 100, conf_accuracy_val}
