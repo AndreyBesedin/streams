@@ -32,7 +32,7 @@ local function generate_from_model(model_file, nb_samples)
   return res1
 end
 
-function generate_from_models_set(dataset, samples_per_model)
+function generate_from_models_set(dataset, samples_per_model, filename)
   local model_folder = '/home/abesedin/workspace/Projects/streams/models/trained_gen_models/' .. dataset .. '/'
   local save_to = '/home/abesedin/workspace/Projects/streams/data/' .. dataset .. '/generated_data/'
   os.execute('mkdir ' .. save_to)
@@ -50,16 +50,17 @@ function generate_from_models_set(dataset, samples_per_model)
   local mbatch_size = 1000; local nb_s_batches = math.ceil(samples_per_model/mbatch_size)
   for idx = 1, nb_models do
     print('Generating data from ' .. models[idx] .. '; assigning label ' .. labels[models[idx]:sub(1,-4)])
-    local filename =  model_folder .. models[idx]
+    local model_name =  model_folder .. models[idx]
     local _start = (idx-1)*samples_per_model+1; local _end = idx*samples_per_model
     for idx_data = 1, nb_s_batches do
       xlua.progress(idx_data, nb_s_batches)
-      batch.data[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)},{},{},{}}] = generate_from_model(filename, mbatch_size):float()
+      batch.data[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)},{},{},{}}] = generate_from_model(model_name, mbatch_size):float()
       batch.labels[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)}}]:fill(labels[models[idx]:sub(1,-4)]);
     end
   end
   --batch.data = 255*(batch.data-batch.data:min())/(batch.data:max()-batch.data:min())
-  torch.save(save_to .. 'gen_data.t7', batch)
+  if not filename then filename = 'gen_data' end
+  torch.save(save_to .. filename .. '.t7', batch)
   return batch
 end
    
