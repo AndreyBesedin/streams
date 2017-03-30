@@ -22,7 +22,8 @@ end
 function load_data(dataset)
   if not torch then require 'torch' end
   if not posix then posix = require 'posix.stdlib' end
-  local root = posix.getenv('ROOT_FOLDER') or '/home/abesedin/workspace/Projects/streams/'
+  if not lfs then require 'lfs' end
+  local root = posix.getenv('ROOT_FOLDER') or lfs.getcurrentdir()
   -- Creating the repository hierarchie
   local data_path = root .. 'data/' .. dataset; os.execute('mkdir ' .. data_path)
   data_path = data_path .. '/original_data/'; os.execute('mkdir ' .. data_path)
