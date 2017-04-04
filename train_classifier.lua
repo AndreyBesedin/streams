@@ -21,9 +21,9 @@ opt = {
   save = 'logs/',
   max_epoch = 200,
   epoch_step = 20,
-  learningRate = 0.001,
+  learningRate = 0.0002,
   momentum = 0.9,
-  weightDecay = 0.0005,
+  weightDecay = 0.00002,
   learningRateDecay = 1e-7
 }
 
@@ -34,7 +34,7 @@ torch.manualSeed(opt.manualSeed)
 torch.setnumthreads(1)
 torch.setdefaulttensortype('torch.FloatTensor')
 local provider = {}
-provider.trainData = torch.load('data/cifar10/original_data/t7/train.t7')
+provider.trainData = torch.load('data/cifar10/generated_data/train.t7')
 provider.validSet = torch.load('data/cifar10/generated_data/validation.t7')
 provider.testData = torch.load('data/cifar10/original_data/t7/test.t7')
 
@@ -48,7 +48,7 @@ architectures.cModel = { --Classification architecture
   opt.data_size,
   {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), dropout = 0.4},
   {type = 'conv2D', outPlanes = 32, ker_size = {4, 4}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}, dropout = 0.3},
-  {type = 'conv2D', outPlanes = 32, ker_size = {4, 4}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {4,4,4,4}}, dropout = 0.4},
+  {type = 'conv2D', outPlanes = 32, ker_size = {4, 4}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}, dropout = 0.4},
   {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
   {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
 }
