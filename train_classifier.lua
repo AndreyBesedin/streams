@@ -33,13 +33,23 @@ opt.manualSeed = torch.random(1, 10000)
 torch.manualSeed(opt.manualSeed)
 torch.setnumthreads(1)
 torch.setdefaulttensortype('torch.FloatTensor')
-local provider = {}
-provider.trainData = torch.load('data/cifar10/generated_data/train.t7')
-provider.validSet = torch.load('data/cifar10/generated_data/validation.t7')
-provider.testData = torch.load('data/cifar10/original_data/t7/test.t7')
+local data = {}
+data.trainData = torch.load('data/mnist/generated_data/train.t7')
+data.validSet = torch.load('data/mnist/generated_data/validation.t7')
+data.testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 
-opt.data_size = provider.trainData.data:size()
+opt.data_size = data.trainData.data:size()
 opt.channels = opt.data_size[2]
+
+local function normalize_images(dataset)
+  dataset.data = dataset.data:float()
+  for idx = 1, dataset.data:size(1) do
+    dataset.data[{{idx},{},{},{}}] = dataset.data[{{idx},{},{},{}}]:div(dataset.data[{{idx},{},{},{}}]:max())
+  end
+  dataset.data = torch.add(torch.mul(dataset.data,2),-1)
+  return dataset
+end
+data.testData = normalize_images(data.testData)
 
 print(opt)
 local architectures = {}
@@ -68,13 +78,13 @@ local model = cast(initialize_model(architectures.cModel))
 print(model)
 print(c.blue '==>' ..' loading data')
 
-provider.trainData.data = provider.trainData.data:float()
-provider.testData.data = provider.testData.data:float()
-provider.validSet.data = provider.validSet.data:float()
+data.trainData.data = data.trainData.data:float()
+data.testData.data = data.testData.data:float()
+data.validSet.data = data.validSet.data:float()
 
-provider.trainData.labels = provider.trainData.labels:float()
-provider.testData.labels = provider.testData.labels:float()
-provider.validSet.labels = provider.validSet.labels:float()
+data.trainData.labels = data.trainData.labels:float()
+data.testData.labels = data.testData.labels:float()
+data.validSet.labels = data.validSet.labels:float()
 
 confusion = optim.ConfusionMatrix(10)
 confusion_val = optim.ConfusionMatrix(10)
@@ -110,20 +120,20 @@ function train()
   print(c.blue '==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
 
   local targets = cast(torch.zeros(opt.batchSize))
-  local indices = torch.randperm(provider.trainData.data:size(1)):long():split(opt.batchSize)
+  local indices = torch.randperm(data.trainData.data:size(1)):long():split(opt.batchSize)
   -- remove last element so that all the batches have equal size
   indices[#indices] = nil
 
   local tic = torch.tic()
   for t,v in ipairs(indices) do
     xlua.progress(t, #indices)
-    local inputs = cast(provider.trainData.data:index(1,v))
+    local inputs = cast(data.trainData.data:index(1,v))
     if opt.flip_data == true then
       for idx = 1, inputs:size(1) do
         if torch.uniform()>0.5 then inputs[{{idx},{},{},{}}] = im_tb.hflip(inputs[{{idx},{},{},{}}]:squeeze():float()); end
       end
     end
-    targets:copy(provider.trainData.labels:index(1,v))
+    targets:copy(data.trainData.labels:index(1,v))
     local feval = function(x)
       if x ~= parameters then parameters:copy(x) end
       gradParameters:zero()
@@ -151,9 +161,9 @@ function test()
   model:evaluate()
   print(c.blue '==>'.." testing on validation set")
   local bs = 125
-  for i=1,provider.validSet.data:size(1),bs do
-    local outputs = model:forward(cast(provider.validSet.data:narrow(1,i,bs)))
-    confusion_val:batchAdd(outputs, cast(provider.validSet.labels:narrow(1,i,bs)))
+  for i=1,data.validSet.data:size(1),bs do
+    local outputs = model:forward(cast(data.validSet.data:narrow(1,i,bs)))
+    confusion_val:batchAdd(outputs, cast(data.validSet.labels:narrow(1,i,bs)))
   end
 
   confusion_val:updateValids()
@@ -161,9 +171,9 @@ function test()
   print('Validation accuracy:', conf_accuracy_val)
 
   print(c.blue '==>'.." testing")
-  for i=1,provider.testData.data:size(1),bs do
-    local outputs = model:forward(cast(provider.testData.data:narrow(1,i,bs)))
-    confusion:batchAdd(outputs, cast(provider.testData.labels:narrow(1,i,bs)))
+  for i=1,data.testData.data:size(1),bs do
+    local outputs = model:forward(cast(data.testData.data:narrow(1,i,bs)))
+    confusion:batchAdd(outputs, cast(data.testData.labels:narrow(1,i,bs)))
   end  
   
   confusion:updateValids()
