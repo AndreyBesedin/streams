@@ -23,7 +23,7 @@ opt = {
   epoch_step = 20,
   learningRate = 0.0002,
   momentum = 0.9,
-  weightDecay = 0.00002,
+  weightDecay = 0.0005,
   learningRateDecay = 1e-7
 }
 
@@ -47,7 +47,7 @@ local architectures = {}
 architectures.cModel = { --Classification architecture
   opt.data_size,
   {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), dropout = 0.4},
-  {type = 'conv2D', outPlanes = 32, ker_size = {4, 4}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}, dropout = 0.3},
+  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
   {type = 'conv2D', outPlanes = 32, ker_size = {4, 4}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}, dropout = 0.4},
   {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
   {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
