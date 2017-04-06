@@ -33,8 +33,8 @@ local function generate_from_model(model_file, nb_samples)
 end
 
 function generate_from_models_set(dataset, samples_per_model, filename)
-  local model_folder = '/home/abesedin/workspace/Projects/streams/models/trained_gen_models/' .. dataset .. '/'
-  local save_to = '/home/abesedin/workspace/Projects/streams/data/' .. dataset .. '/generated_data/'
+  local model_folder = '/home/besedina/workspace/Projects/streams/models/trained_gen_models/' .. dataset .. '/'
+  local save_to = '/home/besedina/workspace/Projects/streams/data/' .. dataset .. '/generated_data/'
   os.execute('mkdir ' .. save_to)
   local models = {}; local nb_models = 0
   for file_ in lfs.dir(model_folder) do
