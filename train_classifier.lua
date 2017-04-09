@@ -92,7 +92,7 @@ architectures = {--Classification architecture
   },
   cModelSmall = {
     opt.data_size,
-    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {4,4,4,4}}},
+    {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {2, 2}, bn = true, act = nn.ReLU(true), dropout = 0.5, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
     {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
     {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
   }
