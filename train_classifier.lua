@@ -13,6 +13,8 @@ local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
 
+gen_p_class = {1000, 3000, 4000, 6000, 8000, 12000}
+
 opt = {
   type = 'cuda',
   root = posix.stdlib.getenv('ROOT_FOLDER') or '/home/abesedin/workspace/Projects/streams/',
@@ -22,7 +24,7 @@ opt = {
   save = 'logs/',
   max_epoch = 100,
   epoch_step = 15,
-  learningRate = 0.001,
+  learningRate = 0.005,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
@@ -43,8 +45,10 @@ local function normalize_gauss(dataset, d_mean, d_std)
   return dataset
 end
 
+for idx_gen = 1, table.getn(gen_p_class) do
+opt.gen_per_class = gen_p_class[idx_gen]
 local accuracies = torch.zeros(opt.max_epoch, opt.nb_runs)
-opt.gen_per_class = posix.stdlib.getenv('GEN_PER_CLASS')
+--opt.gen_per_class = posix.stdlib.getenv('GEN_PER_CLASS')
 
 dofile(opt.root .. 'data/data_preparation/get_data.lua')
 dofile(opt.root .. 'data/data_preparation/visualize_data.lua')
@@ -164,7 +168,7 @@ function train()
   -- drop learning rate every "epoch_step" epochs
   if epoch % opt.epoch_step == 0 then optimState.learningRate = optimState.learningRate/2 end
   
-  print(c.blue '==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
+  print(c.blue '==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']' .. ', gen_per_class = ' .. opt.gen_per_class)
 
   local targets = cast(torch.zeros(opt.batchSize))
   local indices = torch.randperm(data.trainData.data:size(1)):long():split(opt.batchSize)
@@ -222,6 +226,8 @@ for i=1,opt.max_epoch do
 end
 
 end
+
+
 local filename = 'results/static_' .. opt.scenario .. '_' .. opt.gen_per_class .. '_nbRuns_' .. opt.nb_runs ..'.t7'
 torch.save(filename, accuracies)
-
+end
