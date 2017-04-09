@@ -81,14 +81,23 @@ opt.channels = opt.data_size[2]
 print(opt)
 local architectures = {}
 local accuracies = torch.zeros(opt.max_epoch)
-architectures.cModel = { --Classification architecture
-  opt.data_size,
-  {type = 'conv2D', outPlanes = 16, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
-  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
-  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
-  {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
-  {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
+architectures = {--Classification architecture
+  cModel = {
+    opt.data_size,
+    {type = 'conv2D', outPlanes = 16, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
+    {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
+    {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
+  },
+  cModelSmall = {
+    opt.data_size,
+    {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {4,4,4,4}}},
+    {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
+    {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
+  }
 }
+
 
 local function cast(t)
    if opt.type == 'cuda' then
@@ -101,7 +110,7 @@ end
 
 print(c.blue '==>' ..' configuring model')
 
-local model = cast(initialize_model(architectures.cModel))
+local model = cast(initialize_model(architectures.cModelSmall))
 print(model)
 print(c.blue '==>' ..' loading data')
 
