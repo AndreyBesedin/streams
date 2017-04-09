@@ -14,12 +14,13 @@ opt = {
   dataset = 'mnist',
   batchSize = 100,
   save = 'logs/',
-  max_epoch = 100,
+  max_epoch = 1000,
   epoch_step = 10,
   learningRate = 0.001,
   momentum = 0.9,
   weightDecay = 0.0005,
-  learningRateDecay = 1e-7
+  learningRateDecay = 1e-7,
+  gen_per_class = 10000
 }
 
 opt.manualSeed = torch.random(1, 10000)
@@ -74,32 +75,32 @@ function get_data_classes(data, classes)
   end
   return res
 end
-    
-print('LOADING DATA')
 
-local gen_data_train = torch.load('data/mnist/generated_data/train.t7')
-local gen_data_val = torch.load('data/mnist/generated_data/validation.t7')
+print('LOADING DATA')
+--local gen_data_train = generate_from_models_set('mnist', opt.gen_per_class)
+local gen_data_train = torch.load('data/mnist/generated_data/train_streams.t7')
+--local gen_data_train = torch.load('data/mnist/generated_data/train_streams.t7')
 local orig_testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 local orig_trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
 
 gen_data_train.data = gen_data_train.data:float()
-gen_data_val.data = gen_data_val.data:float()
 orig_testData.data = orig_testData.data:float()
 
 gen_data_train.labels = gen_data_train.labels:float()
-gen_data_val.labels = gen_data_val.labels:float()
 orig_testData.labels = orig_testData.labels:float()
 
 print('NORMALIZING ORIGINAL DATA')
 orig_testData = normalize_images(orig_testData)
 orig_trainData = normalize_images(orig_trainData)
 
+print('train data stats: mean: ' .. gen_data_train.data:mean() .. ', std: ' .. gen_data_train.data:std())
+print('test data stats: mean: ' .. orig_testData.data:mean() .. ', std: ' .. orig_testData.data:std())
+
 print('MODELING DATA STREAMS')
 data = {}
 data.trainData_gen = regroup_data_by_labels(gen_data_train); gen_data_train = nil
 data.trainData_orig = regroup_data_by_labels(orig_trainData); orig_trainData = nil
 data.testData = regroup_data_by_labels(orig_testData); orig_testData = nil
-data.valData = regroup_data_by_labels(gen_data_val); gen_data_val = nil
 
 print('CONFIGURING MODEL ARCHITECTURE')
 opt.data_size = data.trainData_gen[1]:size()
@@ -109,7 +110,7 @@ opt.nb_classes = 2
 local architectures = {}
 architectures.cModel = { --Classification architecture
   opt.data_size,
-  {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {2, 2}, bn = true, act = nn.ReLU(true), dropout = 0.5, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+  {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {2, 2}, bn = false, dropout = 0.1, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
   {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
   {type = 'lin', act = nn.LogSoftMax(), out_size = opt.nb_classes}
 }
@@ -183,15 +184,6 @@ function test()
   model:evaluate()
   print(c.blue '==>'.." testing on validation set")
   local bs = 100
---   for i=1,gen_data_val.data:size(1),bs do
---     local outputs = model:forward(cast(gen_data_val.data:narrow(1,i,bs)))
---     confusion_val:batchAdd(outputs, cast(gen_data_val.labels:narrow(1,i,bs)))
---   end
-
---  confusion_val:updateValids()
---  local conf_accuracy_val = confusion_val.totalValid * 100
---  print('Validation accuracy:', conf_accuracy_val)
-
   print(c.blue '==>'.." testing")
   for i=1,test_data.data:size(1),bs do
     local ids = torch.range(i, math.min(i+bs-1, test_data.data:size(1))):long()
@@ -201,44 +193,6 @@ function test()
   
   confusion_test:updateValids()
   print('Test accuracy:', confusion_test.totalValid * 100)
-  testLogger = nil
-  if testLogger then
-    paths.mkdir(opt.save)
-    testLogger:add{train_acc, confusion_test.totalValid * 100, conf_accuracy_val}
-    testLogger:style{'-', '-', '-'}
-    testLogger:plot()
-
-    if paths.filep(opt.save..'/test.log.eps') then
-      local base64im
-      do
-        os.execute(('convert -density 200 %s/test.log.eps %s/test.png'):format(opt.save,opt.save))
-        os.execute(('openssl base64 -in %s/test.png -out %s/test.base64'):format(opt.save,opt.save))
-        local f = io.open(opt.save..'/test.base64')
-        if f then base64im = f:read'*all' end
-      end
-
-      local file = io.open(opt.save..'/report.html','w')
-      file:write(([[
-      <!DOCTYPE html>
-      <html>
-      <body>
-      <title>%s - %s</title>
-      <img src="data:image/png;base64,%s">
-      <h4>optimState:</h4>
-      <table>
-      ]]):format(opt.save,epoch,base64im))
-      for k,v in pairs(optimState) do
-        if torch.type(v) == 'number' then
-          file:write('<tr><td>'..k..'</td><td>'..v..'</td></tr>\n')
-        end
-      end
-      file:write'</table><pre>\n'
-      file:write(tostring(confusion)..'\n')
-      file:write(tostring(model)..'\n')
-      file:write'</pre></body></html>'
-      file:close()
-    end
-  end
 
   -- save model every 50 epochs
   if epoch % 19 == 0 then
@@ -246,18 +200,22 @@ function test()
     print('==> saving model to '..filename)
     torch.save(filename, model:get(3):clearState())
   end
-
-  confusion_test:zero()
-  confusion_val:zero()
+  print(confusion_test)
 end
 
 print('TRAINING')
 local classes = {1} -- initialize with one class and add others later
 for idx = 1, 1 do
+  -- Case of only generated data used for training
   table.insert(classes, idx+1)
   stream_data = get_data_classes(data.trainData_gen, classes)
+  -- Case of adding original data
+  -- stream_data = get_data_classes(data.trainData_gen, classes)
+  -- stream_data.data = torch.cat(stream_data.data, data.trainData_orig[idx+1], 1)
+  -- stream_data.labels = torch.cat(stream_data.labels, torch.Tensor(data.trainData_orig[idx+1]:size(1)):fill(idx+1), 1)
+  -- table.insert(classes, idx+1)
   test_data = get_data_classes(data.testData, classes)
-  val_data = get_data_classes(data.valData, classes)
+--  val_data = get_data_classes(data.valData, classes)
   for i=1,opt.max_epoch do
     train()
     test()
