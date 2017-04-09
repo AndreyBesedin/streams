@@ -168,7 +168,7 @@ function train()
   -- drop learning rate every "epoch_step" epochs
   if epoch % opt.epoch_step == 0 then optimState.learningRate = optimState.learningRate/2 end
   
-  print(c.blue '==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']' .. ', gen_per_class = ' .. opt.gen_per_class)
+  print(c.blue '==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']' .. ', gen_per_class = ' .. opt.gen_per_class .. ', run number: ' .. idx_run)
 
   local targets = cast(torch.zeros(opt.batchSize))
   local indices = torch.randperm(data.trainData.data:size(1)):long():split(opt.batchSize)
