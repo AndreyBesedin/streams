@@ -74,7 +74,7 @@ opt.channels = opt.data_size[2]
 
 print(opt)
 local architectures = {}
-
+local accuracies = torch.zeros(opt.max_epoch)
 architectures.cModel = { --Classification architecture
   opt.data_size,
   {type = 'conv2D', outPlanes = 16, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
@@ -188,6 +188,7 @@ function test()
   end  
   confusion:updateValids()
   print('Test accuracy:', confusion.totalValid * 100)
+  accuracies[epoch-1] =  confusion.totalValid * 100
 
   confusion:zero()
   confusion_val:zero()
