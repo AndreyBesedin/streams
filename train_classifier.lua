@@ -42,9 +42,8 @@ local function normalize_images(dataset)
   return dataset
 end
 
-local function normalize_gauss(dataset)
-  dataset.data = torch.add(dataset.data,-dataset.data:mean())
-  dataset.data = dataset.data:div(dataset.data:std())
+local function normalize_gauss(dataset, d_mean, d_std)
+  dataset.data = torch.add(dataset.data,-d_mean):div(d_std)
   return dataset
 end
 
@@ -60,8 +59,15 @@ else
   data.validSet = torch.load('data/mnist/generated_data/validation.t7')
 end
 
+local data_mean = data.trainData.data:mean()
+local data_std = data.trainData.data:std()
+
 data.testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 data.testData = normalize_images(data.testData)
+
+-- Getting close to gaussian distribution
+data.trainData = normalize_gauss(data.trainData, data_mean, data_std)
+data.testData = normalize_gauss(data.testData, data_mean, data_std)
 
 opt.data_size = data.trainData.data:size()
 opt.channels = opt.data_size[2]
@@ -71,8 +77,9 @@ local architectures = {}
 
 architectures.cModel = { --Classification architecture
   opt.data_size,
-  {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {2, 2}, bn = true, act = nn.ReLU(true), dropout = 0.5, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
-  {type = 'conv2D', outPlanes = 32, ker_size = {2, 2}, step = {2, 2}, bn = true, act = nn.ReLU(true), dropout = 0.5},
+  {type = 'conv2D', outPlanes = 16, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
   {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
   {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
 }
@@ -102,8 +109,8 @@ data.validSet.labels = data.validSet.labels:float()
 
 print('trainset mean: ' ..  data.trainData.data:mean() .. ', std: ' ..  data.trainData.data:std())
 print('testset mean: ' ..  data.testData.data:mean() .. ', std: ' ..  data.testData.data:std())
-show_multiple_images(data.trainData, 20, 20)
-show_multiple_images(data.testData, 20, 20)
+--show_multiple_images(data.trainData, 20, 20)
+--show_multiple_images(data.testData, 20, 20)
 
 confusion = optim.ConfusionMatrix(10)
 confusion_val = optim.ConfusionMatrix(10)
@@ -172,70 +179,15 @@ end
 function test()
   -- disable flips, dropouts and batch normalization
   model:evaluate()
-  print(c.blue '==>'.." testing on validation set")
-  local bs = 125
-  for i=1,data.validSet.data:size(1),bs do
-    local outputs = model:forward(cast(data.validSet.data:narrow(1,i,bs)))
-    confusion_val:batchAdd(outputs, cast(data.validSet.labels:narrow(1,i,bs)))
-  end
-
-  confusion_val:updateValids()
-  local conf_accuracy_val = confusion_val.totalValid * 100
-  print('Validation accuracy:', conf_accuracy_val)
-
+  local bs = 100
   print(c.blue '==>'.." testing")
   for i=1,data.testData.data:size(1),bs do
-    local outputs = model:forward(cast(data.testData.data:narrow(1,i,bs)))
-    confusion:batchAdd(outputs, cast(data.testData.labels:narrow(1,i,bs)))
+    local ids = torch.range(i, math.min(i+bs-1, data.testData.data:size(1))):long()
+    local outputs = model:forward(cast(data.testData.data:index(1, ids)))
+    confusion:batchAdd(outputs, cast(data.testData.labels:index(1, ids)))
   end  
-  
   confusion:updateValids()
   print('Test accuracy:', confusion.totalValid * 100)
-  testLogger = nil
-  if testLogger then
-    paths.mkdir(opt.save)
-    testLogger:add{train_acc, confusion.totalValid * 100, conf_accuracy_val}
-    testLogger:style{'-', '-', '-'}
-    testLogger:plot()
-
-    if paths.filep(opt.save..'/test.log.eps') then
-      local base64im
-      do
-        os.execute(('convert -density 200 %s/test.log.eps %s/test.png'):format(opt.save,opt.save))
-        os.execute(('openssl base64 -in %s/test.png -out %s/test.base64'):format(opt.save,opt.save))
-        local f = io.open(opt.save..'/test.base64')
-        if f then base64im = f:read'*all' end
-      end
-
-      local file = io.open(opt.save..'/report.html','w')
-      file:write(([[
-      <!DOCTYPE html>
-      <html>
-      <body>
-      <title>%s - %s</title>
-      <img src="data:image/png;base64,%s">
-      <h4>optimState:</h4>
-      <table>
-      ]]):format(opt.save,epoch,base64im))
-      for k,v in pairs(optimState) do
-        if torch.type(v) == 'number' then
-          file:write('<tr><td>'..k..'</td><td>'..v..'</td></tr>\n')
-        end
-      end
-      file:write'</table><pre>\n'
-      file:write(tostring(confusion)..'\n')
-      file:write(tostring(model)..'\n')
-      file:write'</pre></body></html>'
-      file:close()
-    end
-  end
-
-  -- save model every 50 epochs
-  if epoch % 50 == 0 then
-    local filename = paths.concat(opt.save, 'model.net')
-    print('==> saving model to '..filename)
-    torch.save(filename, model:get(3):clearState())
-  end
 
   confusion:zero()
   confusion_val:zero()
