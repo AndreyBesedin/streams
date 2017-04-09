@@ -17,48 +17,62 @@ opt = {
   flip_data = false,
   dataset = 'mnist',
   batchSize = 100,
-  channels = 3,
   save = 'logs/',
   max_epoch = 200,
   epoch_step = 20,
-  learningRate = 0.0002,
+  learningRate = 0.002,
   momentum = 0.9,
   weightDecay = 0.0005,
-  learningRateDecay = 1e-7
+  learningRateDecay = 1e-7,
+  scenario = 'orig'
 }
 
 dofile(opt.root .. 'data/data_preparation/get_data.lua')
+dofile(opt.root .. 'data/data_preparation/visualize_data.lua')
 dofile(opt.root .. 'models/initialize_model.lua')
 opt.manualSeed = torch.random(1, 10000)
 torch.manualSeed(opt.manualSeed)
 torch.setnumthreads(1)
 torch.setdefaulttensortype('torch.FloatTensor')
-local data = {}
-data.trainData = torch.load('data/mnist/generated_data/train.t7')
-data.validSet = torch.load('data/mnist/generated_data/validation.t7')
-data.testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
-
-opt.data_size = data.trainData.data:size()
-opt.channels = opt.data_size[2]
 
 local function normalize_images(dataset)
   dataset.data = dataset.data:float()
-  for idx = 1, dataset.data:size(1) do
-    dataset.data[{{idx},{},{},{}}] = dataset.data[{{idx},{},{},{}}]:div(dataset.data[{{idx},{},{},{}}]:max())
-  end
-  dataset.data = torch.add(torch.mul(dataset.data,2),-1)
+  dataset.data = dataset.data:div(dataset.data:max()/2)
+  dataset.data = torch.add(dataset.data,-1)
   return dataset
 end
+
+local function normalize_gauss(dataset)
+  dataset.data = torch.add(dataset.data,-dataset.data:mean())
+  dataset.data = dataset.data:div(dataset.data:std())
+  return dataset
+end
+
+local data = {}
+if opt.scenario == 'orig' then
+  -- Original data scenario
+  data.trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
+  data.validSet = torch.load('data/mnist/generated_data/validation.t7')
+  data.trainData = normalize_images(data.trainData)
+else
+  -- Generated data scenario
+  data.trainData = torch.load('data/mnist/generated_data/train.t7')
+  data.validSet = torch.load('data/mnist/generated_data/validation.t7')
+end
+
+data.testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 data.testData = normalize_images(data.testData)
+
+opt.data_size = data.trainData.data:size()
+opt.channels = opt.data_size[2]
 
 print(opt)
 local architectures = {}
 
 architectures.cModel = { --Classification architecture
   opt.data_size,
-  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), dropout = 0.4},
-  {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
-  {type = 'conv2D', outPlanes = 32, ker_size = {4, 4}, padding = {1,1}, bn = true, act = nn.ReLU(true), pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}, dropout = 0.4},
+  {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {2, 2}, bn = true, act = nn.ReLU(true), dropout = 0.5, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+  {type = 'conv2D', outPlanes = 32, ker_size = {2, 2}, step = {2, 2}, bn = true, act = nn.ReLU(true), dropout = 0.5},
   {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
   {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
 }
@@ -85,6 +99,11 @@ data.validSet.data = data.validSet.data:float()
 data.trainData.labels = data.trainData.labels:float()
 data.testData.labels = data.testData.labels:float()
 data.validSet.labels = data.validSet.labels:float()
+
+print('trainset mean: ' ..  data.trainData.data:mean() .. ', std: ' ..  data.trainData.data:std())
+print('testset mean: ' ..  data.testData.data:mean() .. ', std: ' ..  data.testData.data:std())
+show_multiple_images(data.trainData, 20, 20)
+show_multiple_images(data.testData, 20, 20)
 
 confusion = optim.ConfusionMatrix(10)
 confusion_val = optim.ConfusionMatrix(10)
@@ -113,7 +132,6 @@ optimState = {
 function train()
   model:training()
   epoch = epoch or 1
-
   -- drop learning rate every "epoch_step" epochs
   if epoch % opt.epoch_step == 0 then optimState.learningRate = optimState.learningRate/2 end
   
@@ -128,11 +146,6 @@ function train()
   for t,v in ipairs(indices) do
     xlua.progress(t, #indices)
     local inputs = cast(data.trainData.data:index(1,v))
-    if opt.flip_data == true then
-      for idx = 1, inputs:size(1) do
-        if torch.uniform()>0.5 then inputs[{{idx},{},{},{}}] = im_tb.hflip(inputs[{{idx},{},{},{}}]:squeeze():float()); end
-      end
-    end
     targets:copy(data.trainData.labels:index(1,v))
     local feval = function(x)
       if x ~= parameters then parameters:copy(x) end
