@@ -12,6 +12,7 @@ dofile 'data/data_preparation/generate_data_from_models.lua'
 local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
+
 opt = {
   type = 'cuda',
   root = posix.stdlib.getenv('ROOT_FOLDER') or '/home/abesedin/workspace/Projects/streams/',
@@ -29,6 +30,8 @@ opt = {
   gen_per_class = 2000 
 }
 
+opt.gen_per_class = posix.stdlib.getenv('GEN_PER_CLASS')
+print(opt.gen_per_class)
 dofile(opt.root .. 'data/data_preparation/get_data.lua')
 dofile(opt.root .. 'data/data_preparation/visualize_data.lua')
 dofile(opt.root .. 'models/initialize_model.lua')
