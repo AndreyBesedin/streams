@@ -201,4 +201,5 @@ for i=1,opt.max_epoch do
   test()
 end
 
+torch.save('orig.training_acc.t7', accuracies)
 
