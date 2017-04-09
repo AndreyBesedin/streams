@@ -39,9 +39,10 @@ end
 
 local function normalize_gauss(dataset, d_mean, d_std)
   if not d_mean then
-    local d_mean = dataset.data:mean(); local d_std =  dataset.data:std()
+    d_mean = dataset.data:mean(); d_std =  dataset.data:std()
   end
   dataset.data = torch.add(dataset.data,-d_mean):div(d_std)
+  d_mean = nil; d_std = nil
   return dataset
 end
 
