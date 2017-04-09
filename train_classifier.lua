@@ -8,6 +8,7 @@ require 'posix.stdlib'
 im_tb = require 'image'
 dofile 'data/data_preparation/get_data.lua'
 dofile 'models/initialize_model.lua'
+dofile 'data/data_preparation/generate_data_from_models.lua'
 local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
@@ -18,13 +19,14 @@ opt = {
   dataset = 'mnist',
   batchSize = 100,
   save = 'logs/',
-  max_epoch = 200,
+  max_epoch = 50,
   epoch_step = 20,
   learningRate = 0.002,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
-  scenario = 'orig'
+  scenario = 'gen',
+  gen_per_class = 2000 
 }
 
 dofile(opt.root .. 'data/data_preparation/get_data.lua')
@@ -55,19 +57,23 @@ if opt.scenario == 'orig' then
   data.trainData = normalize_images(data.trainData)
 else
   -- Generated data scenario
-  data.trainData = torch.load('data/mnist/generated_data/train.t7')
+  data.trainData = generate_from_models_set('mnist', opt.gen_per_class)
+--  data.trainData = torch.load('data/mnist/generated_data/train.t7')
   data.validSet = torch.load('data/mnist/generated_data/validation.t7')
 end
 
-local data_mean = data.trainData.data:mean()
-local data_std = data.trainData.data:std()
+data.trainData_orig = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
+data.trainData_orig.data = data.trainData_orig.data:float()
+local data_mean = data.trainData_orig.data:mean()
+local data_std = data.trainData_orig.data:std()
+data.trainData_orig = nil
 
 data.testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 data.testData = normalize_images(data.testData)
 
--- Getting close to gaussian distribution
-data.trainData = normalize_gauss(data.trainData, data_mean, data_std)
-data.testData = normalize_gauss(data.testData, data_mean, data_std)
+-- -- Getting close to gaussian distribution
+-- data.trainData = normalize_gauss(data.trainData, data_mean, data_std)
+-- data.testData = normalize_gauss(data.testData, data_mean, data_std)
 
 opt.data_size = data.trainData.data:size()
 opt.channels = opt.data_size[2]
@@ -194,12 +200,11 @@ function test()
   confusion_val:zero()
 end
 
-print('Model type: ' .. model:type())
-print('Data type: ' .. model:type())
 for i=1,opt.max_epoch do
   train()
   test()
 end
 
-torch.save('orig.training_acc.t7', accuracies)
+local filename = 'results/static_' .. opt.scenario .. '_' .. opt.gen_per_class .. '.t7'
+torch.save(filename, accuracies)
 
