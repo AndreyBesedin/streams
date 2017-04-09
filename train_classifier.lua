@@ -13,7 +13,7 @@ local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
 
-gen_p_class = {1000, 3000, 4000, 6000, 8000, 12000}
+gen_p_class = {10000, 3000, 4000, 6000, 8000, 12000}
 
 opt = {
   type = 'cuda',
@@ -76,6 +76,7 @@ end
 
 data.trainData_orig = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
 data.trainData_orig.data = data.trainData_orig.data:float()
+data.trainData_orig = normalize_images(data.trainData_orig)
 local data_mean = data.trainData_orig.data:mean()
 local data_std = data.trainData_orig.data:std()
 data.trainData_orig = nil
@@ -84,8 +85,8 @@ data.testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 data.testData = normalize_images(data.testData)
 
 -- -- Getting close to gaussian distribution
--- data.trainData = normalize_gauss(data.trainData, data_mean, data_std)
--- data.testData = normalize_gauss(data.testData, data_mean, data_std)
+data.trainData = normalize_gauss(data.trainData, data.trainData.data:mean(), data.trainData.data:std())
+data.testData = normalize_gauss(data.testData, data_mean, data_std)
 
 opt.data_size = data.trainData.data:size()
 opt.channels = opt.data_size[2]
