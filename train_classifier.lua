@@ -22,23 +22,14 @@ opt = {
   save = 'logs/',
   max_epoch = 100,
   epoch_step = 15,
-  learningRate = 0.003,
+  learningRate = 0.001,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
   scenario = 'gen',
+  nb_runs = 5,
   gen_per_class = 2000 
 }
-
-opt.gen_per_class = posix.stdlib.getenv('GEN_PER_CLASS')
-print(opt.gen_per_class)
-dofile(opt.root .. 'data/data_preparation/get_data.lua')
-dofile(opt.root .. 'data/data_preparation/visualize_data.lua')
-dofile(opt.root .. 'models/initialize_model.lua')
-opt.manualSeed = torch.random(1, 10000)
-torch.manualSeed(opt.manualSeed)
-torch.setnumthreads(1)
-torch.setdefaulttensortype('torch.FloatTensor')
 
 local function normalize_images(dataset)
   dataset.data = dataset.data:float()
@@ -51,6 +42,20 @@ local function normalize_gauss(dataset, d_mean, d_std)
   dataset.data = torch.add(dataset.data,-d_mean):div(d_std)
   return dataset
 end
+
+local accuracies = torch.zeros(opt.max_epoch, opt.nb_runs)
+opt.gen_per_class = posix.stdlib.getenv('GEN_PER_CLASS')
+
+dofile(opt.root .. 'data/data_preparation/get_data.lua')
+dofile(opt.root .. 'data/data_preparation/visualize_data.lua')
+dofile(opt.root .. 'models/initialize_model.lua')
+for idx_run = 1, opt.nb_runs do 
+  local epoch = 1
+  
+opt.manualSeed = torch.random(1, 10000)
+torch.manualSeed(opt.manualSeed)
+torch.setnumthreads(1)
+torch.setdefaulttensortype('torch.FloatTensor')
 
 local data = {}
 if opt.scenario == 'orig' then
@@ -83,7 +88,6 @@ opt.channels = opt.data_size[2]
 
 print(opt)
 local architectures = {}
-local accuracies = torch.zeros(opt.max_epoch)
 architectures = {--Classification architecture
   cModel = {
     opt.data_size,
@@ -206,7 +210,7 @@ function test()
   end  
   confusion:updateValids()
   print('Test accuracy:', confusion.totalValid * 100)
-  accuracies[epoch-1] =  confusion.totalValid * 100
+  accuracies[epoch-1][idx_run] =  confusion.totalValid * 100
 
   confusion:zero()
   confusion_val:zero()
@@ -217,6 +221,7 @@ for i=1,opt.max_epoch do
   test()
 end
 
-local filename = 'results/static_' .. opt.scenario .. '_' .. opt.gen_per_class .. '.t7'
+end
+local filename = 'results/static_' .. opt.scenario .. '_' .. opt.gen_per_class .. '_nbRuns_' .. opt.nb_runs ..'.t7'
 torch.save(filename, accuracies)
 
