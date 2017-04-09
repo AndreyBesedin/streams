@@ -13,7 +13,7 @@ local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
 
-gen_p_class = {1000, 3000, 4000, 6000, 8000, 12000}
+gen_p_class = {4000, 6000, 8000, 12000}
 
 opt = {
   type = 'cuda',
@@ -22,8 +22,8 @@ opt = {
   dataset = 'mnist',
   batchSize = 100,
   save = 'logs/',
-  max_epoch = 100,
-  epoch_step = 15,
+  max_epoch = 50,
+  epoch_step = 10,
   learningRate = 0.005,
   momentum = 0.9,
   weightDecay = 0.0005,
