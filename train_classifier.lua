@@ -53,6 +53,7 @@ end
 if opt.scenario == 'gen' then N_gen = table.getn(gen_p_class) else N_gen = 1 end
 
 for idx_gen = 1, N_gen do
+  opt.batchSize = math.min(100, gen_p_class[idx_gen])
   opt.gen_per_class = gen_p_class[idx_gen]
   local accuracies = torch.zeros(opt.max_epoch, opt.nb_runs)
   for idx_run = 1, opt.nb_runs do 
