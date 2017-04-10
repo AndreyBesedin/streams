@@ -54,7 +54,8 @@ function generate_from_models_set(dataset, samples_per_model, filename)
     local _start = (idx-1)*samples_per_model+1; local _end = idx*samples_per_model
     for idx_data = 1, nb_s_batches do
       xlua.progress(idx_data, nb_s_batches)
-      batch.data[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)},{},{},{}}] = generate_from_model(model_name, mbatch_size):float()
+      local b_size = math.min(_end,_start -1  + idx_data*mbatch_size) - (_start + (idx_data-1)*mbatch_size) + 1
+      batch.data[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)},{},{},{}}] = generate_from_model(model_name,b_size):float()
       batch.labels[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)}}]:fill(labels[models[idx]:sub(1,-4)]);
     end
   end

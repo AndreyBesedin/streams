@@ -11,7 +11,8 @@ local c = require 'trepl.colorize'
 
 posix.stdlib.setenv('ROOT_FOLDER', lfs.currentdir() .. '/')
 
-local percentage = {0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.09, 0.11, 0.13, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1}
+--local percentage = {0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.09, 0.11, 0.13, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1}
+local percentage = {0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1}
 gen_p_class = {}
 for idx = 1, table.getn(percentage) do
   table.insert(gen_p_class, 6000*percentage[idx])
