@@ -16,14 +16,15 @@ opt = {
   batchSize = 100,
   save = 'logs/',
   first_time_epochs = 10,
-  max_epoch = 10,
+  max_epoch = 1,
   epoch_step = 20,
   learningRate = 0.001,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
   gen_per_class = 6000,
-  train_data = 'gen'
+  train_data = 'gen',
+  coeff_gen = 3
 }
 
 opt.manualSeed = torch.random(1, 10000)
@@ -74,7 +75,7 @@ function regroup_data_by_labels(data)
   return data_by_labels
 end
 
-function get_data_classes(data, classes)
+function get_data_classes(data, classes, data_size)
   if not data then error('no data provided') end
   if not classes then error('No classes chosen') end
   if type(classes) ~= 'table' or table.getn(classes) == 0 then error('Provide classes list in non-empty table format') end
@@ -85,12 +86,17 @@ function get_data_classes(data, classes)
     res.data = torch.cat(res.data, data[classes[idx]], 1)
     res.labels = torch.cat(res.labels, torch.Tensor(data[classes[idx]]:size(1)):fill(classes[idx]), 1)
   end
+  if data_size then
+    local ids = torch.randperm(res.data:size(1))
+    ids = ids[{{1, data_size}}]:long()
+    res.data = torch.index(1)
+  end
   return res
 end
 
 print('LOADING DATA')
 --local gen_data_train = generate_from_models_set('mnist', opt.gen_per_class, 'train_streams')
-local gen_data_train = torch.load('data/mnist/generated_data/train_streams.t7')
+local gen_data_train = torch.load('data/mnist/generated_data/train.t7')
 local orig_testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 local orig_trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
 
@@ -228,14 +234,15 @@ end
 print('TRAINING')
 local classes = {1} -- initialize with one class and add others later
 for idx = 1, 9 do
-  
   -- Case of only generated data used for training
-  if opt.train_data = 'gen' then
-   table.insert(classes, idx+1)
-   stream_data = get_data_classes(data.trainData_gen, classes)
-  elseif opt.train_data = 'mixed' then 
-    -- Case of adding original data
+  if opt.train_data == 'gen' then
+    table.insert(classes, idx+1)
     stream_data = get_data_classes(data.trainData_gen, classes)
+    class_size = data.trainData_gen[1]:size(1)
+  elseif opt.train_data == 'mixed' then 
+    -- Case of adding original data
+    class_size = data.trainData_orig[idx+1]:size(1)
+    stream_data = get_data_classes(data.trainData_gen, classes, class_size*opt.coeff_gen)
     stream_data.data = torch.cat(stream_data.data, data.trainData_orig[idx+1], 1)
     stream_data.labels = torch.cat(stream_data.labels, torch.Tensor(data.trainData_orig[idx+1]:size(1)):fill(idx+1), 1)
     table.insert(classes, idx+1)

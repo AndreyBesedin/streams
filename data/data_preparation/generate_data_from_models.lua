@@ -47,7 +47,7 @@ function generate_from_models_set(dataset, samples_per_model, filename)
   local batch = {}
   batch.data = torch.zeros(samples_per_model*nb_models, dsize[2], h, w):float()
   batch.labels = torch.zeros(samples_per_model*nb_models):float()
-  local mbatch_size = 1000; local nb_s_batches = math.ceil(samples_per_model/mbatch_size)
+  local mbatch_size = math.min(1000,samples_per_model); local nb_s_batches = math.ceil(samples_per_model/mbatch_size)
   for idx = 1, nb_models do
     print('Generating data from ' .. models[idx] .. '; assigning label ' .. labels[models[idx]:sub(1,-4)])
     local model_name =  model_folder .. models[idx]
