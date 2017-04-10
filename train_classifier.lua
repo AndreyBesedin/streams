@@ -21,13 +21,13 @@ opt = {
   batchSize = 100,
   save = 'logs/',
   max_epoch = 100,
-  epoch_step = 10,
+  epoch_step = 20,
   learningRate = 0.005,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
   scenario = 'orig', --possible options: 'gen', 'orig'
-  nb_runs = 5,
+  nb_runs = 1,
 }
 
 local function normalize_images(dataset)
@@ -64,7 +64,7 @@ for idx_gen = 1, N_gen do
       data.trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
       data.trainData = normalize_images(data.trainData)
       data.trainData.data = data.trainData.data:float()
-    elseif opt.scenario == 'gen'
+    elseif opt.scenario == 'gen' then
       -- Generated data scenario
       data.trainData = generate_from_models_set('mnist', opt.gen_per_class)
       --data.trainData = torch.load('data/mnist/generated_data/train.t7')
@@ -201,9 +201,9 @@ for idx_gen = 1, N_gen do
     end
   end
   if opt.scenario == 'gen' then
-    local filename = 'results/static_' .. opt.scenario .. '_' .. opt.gen_per_class .. '_nbRuns_' .. opt.nb_runs ..'.t7'
+    filename = 'results/static_' .. opt.scenario .. '_' .. opt.gen_per_class .. '_nbRuns_' .. opt.nb_runs ..'.t7'
   else
-    local filename = 'results/static_' .. opt.scenario .. '_nbRuns_' .. opt.nb_runs ..'.t7'
+    filename = 'results/static_' .. opt.scenario .. '_nbRuns_' .. opt.nb_runs ..'.t7'
   end
   torch.save(filename, accuracies)
 end
