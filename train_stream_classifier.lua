@@ -5,6 +5,7 @@ require 'nn'
 require 'cunn'
 dofile 'data/data_preparation/get_data.lua'
 dofile 'models/initialize_model.lua'
+dofile 'data/data_preparation/generate_data_from_models.lua'
 
 local c = require 'trepl.colorize'
 
@@ -14,13 +15,15 @@ opt = {
   dataset = 'mnist',
   batchSize = 100,
   save = 'logs/',
-  max_epoch = 1000,
-  epoch_step = 10,
+  first_time_epochs = 10,
+  max_epoch = 10,
+  epoch_step = 20,
   learningRate = 0.001,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
-  gen_per_class = 10000
+  gen_per_class = 6000,
+  train_data = 'gen'
 }
 
 opt.manualSeed = torch.random(1, 10000)
@@ -34,8 +37,17 @@ print("Options: "); print(opt)
 
 local function normalize_images(dataset)
   dataset.data = dataset.data:float()
-  dataset.data = dataset.data:div(dataset.data:max()/2)
+  dataset.data = dataset.data:div(255/2)
   dataset.data = torch.add(dataset.data,-1)
+  return dataset
+end
+
+local function normalize_gauss(dataset, d_mean, d_std)
+  if not d_mean then
+    d_mean = dataset.data:mean(); d_std =  dataset.data:std()
+  end
+  dataset.data = torch.add(dataset.data,-d_mean):div(d_std)
+  d_mean = nil; d_std = nil
   return dataset
 end
 
@@ -77,9 +89,8 @@ function get_data_classes(data, classes)
 end
 
 print('LOADING DATA')
---local gen_data_train = generate_from_models_set('mnist', opt.gen_per_class)
+--local gen_data_train = generate_from_models_set('mnist', opt.gen_per_class, 'train_streams')
 local gen_data_train = torch.load('data/mnist/generated_data/train_streams.t7')
---local gen_data_train = torch.load('data/mnist/generated_data/train_streams.t7')
 local orig_testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 local orig_trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
 
@@ -92,8 +103,14 @@ orig_testData.labels = orig_testData.labels:float()
 print('NORMALIZING ORIGINAL DATA')
 orig_testData = normalize_images(orig_testData)
 orig_trainData = normalize_images(orig_trainData)
+d_mean = orig_trainData.data:mean(); d_std = orig_trainData.data:std()
 
-print('train data stats: mean: ' .. gen_data_train.data:mean() .. ', std: ' .. gen_data_train.data:std())
+gen_data_train = normalize_gauss(gen_data_train)
+orig_testData = normalize_gauss(orig_testData, d_mean, d_std)
+orig_trainData = normalize_gauss(orig_trainData, d_mean, d_std)
+
+print('gen train data stats: mean: ' .. gen_data_train.data:mean() .. ', std: ' .. gen_data_train.data:std())
+print('orig train data stats: mean: ' .. orig_trainData.data:mean() .. ', std: ' .. orig_trainData.data:std())
 print('test data stats: mean: ' .. orig_testData.data:mean() .. ', std: ' .. orig_testData.data:std())
 
 print('MODELING DATA STREAMS')
@@ -105,7 +122,7 @@ data.testData = regroup_data_by_labels(orig_testData); orig_testData = nil
 print('CONFIGURING MODEL ARCHITECTURE')
 opt.data_size = data.trainData_gen[1]:size()
 opt.channels = opt.data_size[2]
-opt.nb_classes = 2
+opt.nb_classes = 10
 
 local architectures = {}
 architectures.cModel = { --Classification architecture
@@ -120,13 +137,9 @@ local model = cast(initialize_model(architectures.cModel))
 
 confusion_train = optim.ConfusionMatrix(opt.nb_classes)
 confusion_test = optim.ConfusionMatrix(opt.nb_classes)
-confusion_val = optim.ConfusionMatrix(opt.nb_classes)
 
 print('Saving at '..opt.save)
 paths.mkdir(opt.save)
-testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
-testLogger:setNames{'% mean class accuracy (train set)', '% mean class accuracy (test set)', '% mean class accuracy (validation set)'}
-testLogger.showPlot = true
 
 parameters,gradParameters = model:getParameters()
 
@@ -173,9 +186,13 @@ function train()
   print(('Train accuracy: '..c.cyan'%.2f'..' %%\t time: %.2f s'):format(
         confusion_train.totalValid * 100, torch.toc(tic)))
   train_acc = confusion_train.totalValid * 100
-  print(confusion_train)
-  confusion_train:zero()
   epoch = epoch + 1
+  print(confusion_train)
+
+--   if epoch % 5 == 0 then
+--     print(confusion_train)
+--   end  
+  confusion_train:zero()
 end
 
 
@@ -201,24 +218,39 @@ function test()
     torch.save(filename, model:get(3):clearState())
   end
   print(confusion_test)
+--   if epoch % 5 == 0 then
+--     print(confusion_test)
+--   end
+  confusion_test:zero()
+
 end
 
 print('TRAINING')
 local classes = {1} -- initialize with one class and add others later
-for idx = 1, 1 do
+for idx = 1, 9 do
+  
   -- Case of only generated data used for training
-  table.insert(classes, idx+1)
-  stream_data = get_data_classes(data.trainData_gen, classes)
-  -- Case of adding original data
-  -- stream_data = get_data_classes(data.trainData_gen, classes)
-  -- stream_data.data = torch.cat(stream_data.data, data.trainData_orig[idx+1], 1)
-  -- stream_data.labels = torch.cat(stream_data.labels, torch.Tensor(data.trainData_orig[idx+1]:size(1)):fill(idx+1), 1)
-  -- table.insert(classes, idx+1)
+  if opt.train_data = 'gen' then
+   table.insert(classes, idx+1)
+   stream_data = get_data_classes(data.trainData_gen, classes)
+  elseif opt.train_data = 'mixed' then 
+    -- Case of adding original data
+    stream_data = get_data_classes(data.trainData_gen, classes)
+    stream_data.data = torch.cat(stream_data.data, data.trainData_orig[idx+1], 1)
+    stream_data.labels = torch.cat(stream_data.labels, torch.Tensor(data.trainData_orig[idx+1]:size(1)):fill(idx+1), 1)
+    table.insert(classes, idx+1)
+  end
   test_data = get_data_classes(data.testData, classes)
---  val_data = get_data_classes(data.valData, classes)
-  for i=1,opt.max_epoch do
-    train()
-    test()
+  if table.getn(classes) == 2 then
+    for i=1,opt.first_time_epochs do
+      train()
+      test()
+    end
+  else
+    for i=1,opt.max_epoch do
+      train()
+      test()
+    end
   end
   -- Add code to reinitialize model and copy parameters from previous step
 end
