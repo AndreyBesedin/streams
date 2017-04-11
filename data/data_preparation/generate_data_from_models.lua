@@ -18,10 +18,12 @@ local function get_labels(dataset)
   assert(dataset=='mnist' or dataset=='cifar10', 'Unknown dataset, please make sure you typed it right')
   if dataset == 'cifar10' then
     labels = {airplane = 1, automobile = 2, bird = 3, cat = 4, deer = 5, dog = 6, frog = 7, horse = 8, ship = 9, truck = 10} 
+    labels_inv = {'airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'} 
   elseif dataset == 'mnist' then
     labels = {zero = 1, one = 2, two = 3, three = 4, four = 5, five = 6, six = 7, seven = 8, eight = 9, nine = 10}
+    labels_inv = {'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'}
   end
-  return labels 
+  return labels, labels_inv
 end
 
 local function generate_from_model(model_file, nb_samples)
@@ -32,18 +34,29 @@ local function generate_from_model(model_file, nb_samples)
   return res1
 end
 
-function generate_from_models_set(dataset, samples_per_model, filename)
+function generate_from_models_set(dataset, samples_per_model, opt)
+  local labels, labels_inv = get_labels(dataset)
   local model_folder = 'models/trained_gen_models/' .. dataset .. '/'
-  local save_to = 'data/' .. dataset .. '/generated_data/'
-  os.execute('mkdir ' .. save_to)
   local models = {}; local nb_models = 0
   for file_ in lfs.dir(model_folder) do
-    if string.find(file_,".t7") then models[nb_models+1] = file_; nb_models = nb_models + 1 end
-  end  
+    if string.find(file_,".t7")  then
+      models[nb_models+1] = file_; nb_models = nb_models + 1 
+    end
+  end
+  local actual_models = {}
+  if opt.labels then
+    for idx1 = 1, nb_models do
+      for idx2 = 1, table.getn(opt.labels) do
+        if labels[models[idx1]:sub(1,-4)] == opt.labels[idx2] then
+          table.insert(actual_models, models[idx1])
+        end
+      end
+    end
+    models = actual_models
+  end
+  nb_models = table.getn(opt.labels)
   local dsize = generate_from_model(model_folder .. models[1], 1):size(); dsize[1] = samples_per_model*nb_models
   local h = dsize[3]; local w = dsize[4] 
-  local labels = get_labels(dataset)
-  
   local batch = {}
   batch.data = torch.zeros(samples_per_model*nb_models, dsize[2], h, w):float()
   batch.labels = torch.zeros(samples_per_model*nb_models):float()
@@ -59,9 +72,14 @@ function generate_from_models_set(dataset, samples_per_model, filename)
       batch.labels[{{_start + (idx_data-1)*mbatch_size, math.min(_end,_start -1  + idx_data*mbatch_size)}}]:fill(labels[models[idx]:sub(1,-4)]);
     end
   end
-  --batch.data = 255*(batch.data-batch.data:min())/(batch.data:max()-batch.data:min())
-  if not filename then filename = 'gen_data' end
-  torch.save(save_to .. filename .. '.t7', batch)
+  
+  -- Saving data
+  if opt.filename then 
+    local save_to = 'data/' .. dataset .. '/generated_data/'
+    os.execute('mkdir ' .. save_to)
+    print('Saving generated data to ' .. save_to .. opt.filename .. '.t7')
+    torch.save(save_to .. opt.filename .. '.t7', batch) 
+  end
   return batch
 end
    
