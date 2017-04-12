@@ -17,14 +17,15 @@ opt = {
   save = 'logs/',
   first_time_epochs = 20,
   max_epoch = 1,
-  epoch_step = 20,
+  epoch_step = 30,
   learningRate = 0.001,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
-  gen_per_class = 6000,
-  train_data = 'gen', -- options: 'gen', 'mixed', 'orig'
+  gen_per_class = 15000,
+  train_data = 'mixed', -- options: 'gen', 'mixed', 'orig'
   gen_to_batch_size_ratio = {1, 1.5, 2, 3, 5, 7, 9},
+  --gen_to_batch_size_ratio = {5, 7, 9},
   gen_to_nb_of_classes_ratio = {0.5, 0.6, 0.7, 0.8, 0.9, 1},
   nb_runs = 10
 }
@@ -93,6 +94,23 @@ function get_data_classes(data, classes, data_size)
   return res
 end
 
+function sample_data(data, nb_samples)
+  local ids = torch.ranperm(data.data:size(1)):float()
+  if nb_samples <= data.data:size(1) then
+    ids = ids[{{1, nb_samples}}]
+  else
+    local ratio = nb_samples/data.data:size(1)
+    for idx = 2, math.ceil(ratio) do
+      local ids_to_add = torch.ranperm(data.data:size(1)):float()
+      ids_to_add = ids_to_add[{{1,math.floor((ratio+1-idx)*data.data:size(1))}}]
+      ids = torch.cat(ids, ids_to_add, 1)
+    end
+  end
+  data.data = data.data:index(1, ids:long())
+  data.labels = data.labels:index(1, ids:long())
+  return data
+end
+
 print('LOADING ORIGINAL DATA')
 local orig_testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
 local orig_trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
@@ -105,6 +123,10 @@ orig_trainData = normalize_images(orig_trainData)
 d_mean = orig_trainData.data:mean(); d_std = orig_trainData.data:std()
 orig_testData = normalize_gauss(orig_testData, d_mean, d_std)
 orig_trainData = normalize_gauss(orig_trainData, d_mean, d_std)
+
+print('Original data size: ' .. orig_trainData.data:size(1))
+orig_trainData = sample_data(orig_trainData, 150000)
+print('Resampled data size: ' .. orig_trainData.data:size(1))
 
 data = {}
 data.trainData_orig = regroup_data_by_labels(orig_trainData); orig_trainData = nil
@@ -227,14 +249,15 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
         class_size = opt.gen_per_class
         new_data = generate_from_models_set(opt.dataset, class_size, {labels = {idx+1}})
         new_data = normalize_gauss(new_data)
-        new_data = new_data.data
+	new_data = new_data.data
       elseif opt.train_data == 'mixed' then 
         -- Case of adding original data
         new_data = data.trainData_orig[idx+1]
         class_size = new_data:size(1)
       end
       -- Initialize stream
-      stream_data = generate_from_models_set(opt.dataset, class_size*coeff_gen, {labels = classes})
+      stream_data = generate_from_models_set(opt.dataset, math.floor(class_size*coeff_gen/table.getn(classes)), {labels = classes})
+      stream_data = normalize_gauss(stream_data)
       stream_data.data = torch.cat(stream_data.data, new_data, 1)
       stream_data.labels = torch.cat(stream_data.labels, torch.Tensor(new_data:size(1)):fill(idx+1), 1)
       
@@ -248,6 +271,7 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
       accuracies[idx][idx_run] = acc_test
     end
   end
+os.execute('mkdir results'); os.execute('mkdir results/stream')
 filename = 'results/stream/' .. opt.train_data .. '_' .. opt.nb_runs .. '_runs_' .. opt.gen_to_batch_size_ratio[idx_coeff] .. '_reg.t7'
 torch.save(filename, accuracies)
 end
