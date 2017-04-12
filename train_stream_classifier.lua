@@ -95,15 +95,19 @@ function get_data_classes(data, classes, data_size)
 end
 
 function sample_data(data, nb_samples)
-  local ids = torch.ranperm(data.data:size(1)):float()
+  local ids = torch.randperm(data.data:size(1)):float()
   if nb_samples <= data.data:size(1) then
     ids = ids[{{1, nb_samples}}]
   else
     local ratio = nb_samples/data.data:size(1)
     for idx = 2, math.ceil(ratio) do
-      local ids_to_add = torch.ranperm(data.data:size(1)):float()
-      ids_to_add = ids_to_add[{{1,math.floor((ratio+1-idx)*data.data:size(1))}}]
-      ids = torch.cat(ids, ids_to_add, 1)
+      local ids_to_add = torch.randperm(data.data:size(1)):float()
+      if ratio > idx then
+        ids = torch.cat(ids, ids_to_add, 1)
+      else
+        ids_to_add = ids_to_add[{{1,math.floor((ratio+1-idx)*data.data:size(1))}}]
+        ids = torch.cat(ids, ids_to_add, 1)
+      end
     end
   end
   data.data = data.data:index(1, ids:long())
