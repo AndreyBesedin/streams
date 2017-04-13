@@ -15,7 +15,7 @@ opt = {
   dataset = 'mnist',
   batchSize = 100,
   save = 'logs/',
-  first_time_epochs = 20,
+  first_time_epochs = 10,
   max_epoch = 1,
   epoch_step = 30,
   learningRate = 0.001,
@@ -24,10 +24,11 @@ opt = {
   learningRateDecay = 1e-7,
   gen_per_class = 15000,
   train_data = 'mixed', -- options: 'gen', 'mixed', 'orig'
-  gen_to_batch_size_ratio = {1, 1.5, 2, 3, 5, 7, 9},
-  --gen_to_batch_size_ratio = {5, 7, 9},
+  --gen_to_batch_size_ratio = {1, 1.5, 2, 3, 5, 7, 9},
+  gen_to_batch_size_ratio = {9},
   gen_to_nb_of_classes_ratio = {0.5, 0.6, 0.7, 0.8, 0.9, 1},
-  nb_runs = 10
+  start_run = 49,
+  nb_runs = 100
 }
 torch.setnumthreads(1)
 torch.setdefaulttensortype('torch.FloatTensor')
@@ -147,10 +148,11 @@ print("Options: "); print(opt)
 
 print('CONFIGURING MODEL ARCHITECTURE')
 
+os.execute('mkdir results/stream/100runs')
 for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
-  accuracies = torch.zeros(9, opt.nb_runs)
   coeff_gen = opt.gen_to_batch_size_ratio[idx_coeff]
-  for idx_run = 1, opt.nb_runs do
+  for idx_run = opt.start_run, opt.nb_runs do
+    accuracies = torch.zeros(9)
     opt.data_size = data.trainData_orig[1]:size()
     opt.channels = opt.data_size[2]
     opt.nb_classes = 10
@@ -272,10 +274,9 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
         train()
         test()
       end
-      accuracies[idx][idx_run] = acc_test
+      accuracies[idx] = acc_test
     end
+    filename = 'results/stream/100runs' .. opt.train_data .. '_run_' .. idx_run .. '_out_of_' .. opt.nb_runs .. '.t7'
+    torch.save(filename, accuracies)
   end
-os.execute('mkdir results'); os.execute('mkdir results/stream')
-filename = 'results/stream/' .. opt.train_data .. '_' .. opt.nb_runs .. '_runs_' .. opt.gen_to_batch_size_ratio[idx_coeff] .. '_reg.t7'
-torch.save(filename, accuracies)
 end
