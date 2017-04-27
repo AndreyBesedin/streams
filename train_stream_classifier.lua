@@ -12,7 +12,7 @@ local c = require 'trepl.colorize'
 opt = {
   type = 'cuda',
   flip_data = false,
-  dataset = 'mnist',
+  dataset = 'cifar10',
   batchSize = 100,
   save = 'logs/',
   first_time_epochs = 10,
@@ -27,7 +27,7 @@ opt = {
   --gen_to_batch_size_ratio = {1, 1.5, 2, 3, 5, 7, 9},
   gen_to_batch_size_ratio = {9},
   gen_to_nb_of_classes_ratio = {0.5, 0.6, 0.7, 0.8, 0.9, 1},
-  start_run = 49,
+  start_run = 1,
   nb_runs = 100
 }
 torch.setnumthreads(1)
@@ -66,7 +66,7 @@ function regroup_data_by_labels(data)
   end
   local data_by_labels = {}
   local count = torch.ones(10)
-  for idx = 1, 10 do data_by_labels[idx] = torch.zeros(nb_per_class[idx], 1, 32, 32) end
+  for idx = 1, 10 do data_by_labels[idx] = torch.zeros(nb_per_class[idx], data.data:size(2), 32, 32) end
   for idx = 1, data.labels:size(1) do
     data_by_labels[data.labels[idx]][{{count[data.labels[idx]]},{},{},{}}]:copy(data.data[{{idx},{},{},{}}])
     count[data.labels[idx]] = count[data.labels[idx]] + 1
@@ -116,9 +116,11 @@ function sample_data(data, nb_samples)
   return data
 end
 
+if opt.dataset == 'mnist' then opt.data_format = 'ascii' end
 print('LOADING ORIGINAL DATA')
-local orig_testData = torch.load('data/mnist/original_data/t7/test.t7', 'ascii')
-local orig_trainData = torch.load('data/mnist/original_data/t7/train.t7', 'ascii')
+local orig_testData = torch.load('data/' .. opt.dataset .. '/original_data/t7/test.t7', opt.data_format or nil)
+local orig_trainData = torch.load('data/' .. opt.dataset .. '/original_data/t7/train.t7', opt.data_format or nil)
+
 orig_testData.data = orig_testData.data:float()
 orig_testData.labels = orig_testData.labels:float()
 
@@ -132,7 +134,6 @@ orig_trainData = normalize_gauss(orig_trainData, d_mean, d_std)
 print('Original data size: ' .. orig_trainData.data:size(1))
 orig_trainData = sample_data(orig_trainData, 150000)
 print('Resampled data size: ' .. orig_trainData.data:size(1))
-
 data = {}
 data.trainData_orig = regroup_data_by_labels(orig_trainData); orig_trainData = nil
 data.testData = regroup_data_by_labels(orig_testData); orig_testData = nil
@@ -255,7 +256,7 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
         class_size = opt.gen_per_class
         new_data = generate_from_models_set(opt.dataset, class_size, {labels = {idx+1}})
         new_data = normalize_gauss(new_data)
-	new_data = new_data.data
+        new_data = new_data.data
       elseif opt.train_data == 'mixed' then 
         -- Case of adding original data
         new_data = data.trainData_orig[idx+1]
@@ -264,6 +265,8 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
       -- Initialize stream
       stream_data = generate_from_models_set(opt.dataset, math.floor(class_size*coeff_gen/table.getn(classes)), {labels = classes})
       stream_data = normalize_gauss(stream_data)
+      print(stream_data.data:size())
+      print(new_data:size())
       stream_data.data = torch.cat(stream_data.data, new_data, 1)
       stream_data.labels = torch.cat(stream_data.labels, torch.Tensor(new_data:size(1)):fill(idx+1), 1)
       
