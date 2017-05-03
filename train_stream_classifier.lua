@@ -12,7 +12,7 @@ local c = require 'trepl.colorize'
 opt = {
   type = 'cuda',
   flip_data = false,
-  dataset = 'cifar10',
+  dataset = 'mnist',
   batchSize = 100,
   save = 'logs/',
   first_time_epochs = 20,
@@ -279,7 +279,7 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
       end
       accuracies[idx] = acc_test
     end
-    filename = 'results/stream/100runs' .. opt.train_data .. '_run_' .. idx_run .. '_out_of_' .. opt.nb_runs .. '.t7'
+    filename = 'results/stream/100runs_' .. opt.train_data .. '_run_' .. idx_run .. '_out_of_' .. opt.nb_runs .. '_gen_' .. coeff_gen .. '.t7'
     torch.save(filename, accuracies)
   end
 end
