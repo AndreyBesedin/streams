@@ -38,13 +38,19 @@ function generate_from_models_set(dataset, samples_per_model, opt)
   local labels, labels_inv = get_labels(dataset)
   local model_folder = 'models/trained_gen_models/' .. dataset .. '/'
   local models = {}; local nb_models = 0
+  -- setting default values
+  if not opt then 
+    opt = {}
+    opt.labels = labels
+    opt.save = false
+  end
   for file_ in lfs.dir(model_folder) do
     if string.find(file_,".t7")  then
       models[nb_models+1] = file_; nb_models = nb_models + 1 
     end
   end
   local actual_models = {}
-  if opt.labels then
+  if table.getn(opt.labels) <  table.getn(labels) then
     for idx1 = 1, nb_models do
       for idx2 = 1, table.getn(opt.labels) do
         if labels[models[idx1]:sub(1,-4)] == opt.labels[idx2] then
@@ -60,6 +66,7 @@ function generate_from_models_set(dataset, samples_per_model, opt)
   local batch = {}
   batch.data = torch.zeros(samples_per_model*nb_models, dsize[2], h, w):float()
   batch.labels = torch.zeros(samples_per_model*nb_models):float()
+  print(batch.data:size())
   local mbatch_size = math.min(1000,samples_per_model); local nb_s_batches = math.ceil(samples_per_model/mbatch_size)
   for idx = 1, nb_models do
     print('Generating data from ' .. models[idx] .. '; assigning label ' .. labels[models[idx]:sub(1,-4)])
@@ -74,9 +81,10 @@ function generate_from_models_set(dataset, samples_per_model, opt)
   end
   
   -- Saving data
-  if opt.filename then 
+  if opt.save == true then 
     local save_to = 'data/' .. dataset .. '/generated_data/'
     os.execute('mkdir ' .. save_to)
+    if not opt.filename then opt.filename = 'generated_data' end
     print('Saving generated data to ' .. save_to .. opt.filename .. '.t7')
     torch.save(save_to .. opt.filename .. '.t7', batch) 
   end

@@ -15,20 +15,20 @@ opt = {
   dataset = 'cifar10',
   batchSize = 100,
   save = 'logs/',
-  first_time_epochs = 10,
+  first_time_epochs = 20,
   max_epoch = 1,
   epoch_step = 30,
   learningRate = 0.001,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
-  gen_per_class = 15000,
-  train_data = 'mixed', -- options: 'gen', 'mixed', 'orig'
-  --gen_to_batch_size_ratio = {1, 1.5, 2, 3, 5, 7, 9},
-  gen_to_batch_size_ratio = {9},
+  gen_per_class = 6000,
+  train_data = 'gen', -- options: 'gen', 'mixed', 'orig'
+  gen_to_batch_size_ratio = {1, 1.5, 2, 3, 5, 7, 9},
+  --gen_to_batch_size_ratio = {9},
   gen_to_nb_of_classes_ratio = {0.5, 0.6, 0.7, 0.8, 0.9, 1},
   start_run = 1,
-  nb_runs = 100
+  nb_runs = 50
 }
 torch.setnumthreads(1)
 torch.setdefaulttensortype('torch.FloatTensor')
