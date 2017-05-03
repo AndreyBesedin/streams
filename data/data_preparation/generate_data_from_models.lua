@@ -49,8 +49,8 @@ function generate_from_models_set(dataset, samples_per_model, opt)
       models[nb_models+1] = file_; nb_models = nb_models + 1 
     end
   end
-  local actual_models = {}
-  if table.getn(opt.labels) <  table.getn(labels) then
+  if table.getn(opt.labels) <  table.getn(labels_inv) then
+    local actual_models = {}
     for idx1 = 1, nb_models do
       for idx2 = 1, table.getn(opt.labels) do
         if labels[models[idx1]:sub(1,-4)] == opt.labels[idx2] then
