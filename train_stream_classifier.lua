@@ -263,7 +263,10 @@ for idx_coeff = 1, table.getn(opt.gen_to_batch_size_ratio) do
         class_size = new_data:size(1)
       end
       -- Initialize stream
-      stream_data = generate_from_models_set(opt.dataset, math.floor(class_size*coeff_gen/table.getn(classes)), {labels = classes})
+      opt.models_folder = '/home/abesedin/workspace/Projects/streams/models/pretrained_gen_models/mnist/'
+      opt.gen_per_class = math.floor(class_size*coeff_gen/table.getn(classes))
+      opt.labels = classes
+      stream_data = generate_from_models_set(opt)
       stream_data = normalize_gauss(stream_data)
       print(stream_data.data:size())
       print(new_data:size())

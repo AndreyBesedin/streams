@@ -15,7 +15,12 @@ local function add_spat_conv_block(model, input_size)
   
   -- ADDING ASKED LAYERS
   --print(input_size)
-  model:add(nn.SpatialConvolution(
+  if layer.type == "conv2D" then
+    l = nn.SpatialConvolution
+  elseif layer.type == "conv2Dfull" then
+    l = nn.SpatialFullConvolution
+  end
+  model:add(l(
     input_size[2], layer.outPlanes, 
     layer.ker_size[1], layer.ker_size[2],    -- size of the convolutional kernel 
     layer.step[1], layer.step[2],            -- stepsize through the image
@@ -43,7 +48,7 @@ local function add_lin_block(model, input_size)
 end
 
 local function get_output_size(input_size)
-  if layer.type == 'conv2D' then
+  if layer.type == 'conv2D' or layer.type == 'conv2Dfull' then
     input_size[2] = layer.outPlanes
     input_size[3] = math.floor((input_size[3] + 2*layer.padding[1] - layer.ker_size[1])/layer.step[1] + 1) 
     input_size[4] = math.floor((input_size[4] + 2*layer.padding[2] - layer.ker_size[2])/layer.step[2] + 1)
@@ -76,7 +81,7 @@ function initialize_model(architecture)
   local prev_layer_type = 'none'
   for idx = 2, table.getn(architecture) do
     layer = architecture[idx]
-    if layer.type == 'conv2D' then 
+    if layer.type == 'conv2D' or layer.type == 'conv2Dfull' then 
       model = add_spat_conv_block(model, input_size); input_size = get_output_size(input_size); prev_layer_type = 'conv' 
     elseif layer.type == 'lin' then
       if prev_layer_type == 'conv' then

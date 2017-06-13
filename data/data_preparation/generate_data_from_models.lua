@@ -34,25 +34,38 @@ local function generate_from_model(model_file, nb_samples)
   return res1
 end
 
-function generate_from_models_set(dataset, samples_per_model, opt)
+local function count(myTable)
+  numItems = 0
+  for k,v in pairs(myTable) do
+    numItems = numItems + 1
+  end
+  return numItems
+end
+
+function generate_from_models_set(opt)
+  local samples_per_model = opt.gen_per_class
+  local dataset = opt.dataset
   local labels, labels_inv = get_labels(dataset)
-  local model_folder = 'models/trained_gen_models/' .. dataset .. '/'
+  if opt.models_folder then
+    model_folder = opt.models_folder
+  else
+    model_folder = 'models/trained_gen_models/' .. dataset .. '/'
+  end
+  print("Models are taken from: " .. model_folder)
   local models = {}; local nb_models = 0
   -- setting default values
-  if not opt then 
-    opt = {}
-    opt.labels = labels
-    opt.save = false
-  end
+  if not opt then opt = {} end
+  if not opt.labels then opt.labels = labels end; 
+  if not opt.save then opt.save = false end
   for file_ in lfs.dir(model_folder) do
     if string.find(file_,".t7")  then
       models[nb_models+1] = file_; nb_models = nb_models + 1 
     end
   end
-  if table.getn(opt.labels) <  table.getn(labels_inv) then
+  if count(opt.labels) <  table.getn(labels_inv) then
     local actual_models = {}
     for idx1 = 1, nb_models do
-      for idx2 = 1, table.getn(opt.labels) do
+      for idx2 = 1, count(opt.labels) do
         if labels[models[idx1]:sub(1,-4)] == opt.labels[idx2] then
           table.insert(actual_models, models[idx1])
         end
@@ -60,7 +73,7 @@ function generate_from_models_set(dataset, samples_per_model, opt)
     end
     models = actual_models
   end
-  nb_models = table.getn(opt.labels)
+  nb_models = count(opt.labels)
   local dsize = generate_from_model(model_folder .. models[1], 1):size(); dsize[1] = samples_per_model*nb_models
   local h = dsize[3]; local w = dsize[4] 
   local batch = {}

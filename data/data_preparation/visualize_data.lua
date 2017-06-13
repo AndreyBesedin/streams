@@ -21,9 +21,9 @@ function show_multiple_images(data, nb1, nb2)
     end
   end
   print('\nVisualizing a ' .. nb1 .. 'x' .. nb2 .. ' table of data samples with labels: \n')
-
   print(labels) 
   if not image then require 'image' end
   image.display(res_image)
+  return res_image
 end
 

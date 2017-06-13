@@ -18,24 +18,31 @@ end
 
 opt = {
   type = 'cuda',
+  experiment = 'multi_gen',
+  testing = 'orig',
   root = posix.stdlib.getenv('ROOT_FOLDER'),
   flip_data = true,
-  dataset = 'cifar10',                                                 -- available datasets: 'mnist', 'cifar10'
+  dataset = 'mnist',                                                 -- available datasets: 'mnist', 'cifar10'
+  models_folder_init = '/home/abesedin/workspace/Projects/streams/models/pretrained_generative_models/mnist_by_train_size/',
   batchSize = 100,
   save = 'logs/',
   max_epoch = 100,
   epoch_step = 20,
-  learningRate = 0.005,
+  learningRate = 0.01,
   momentum = 0.9,
   weightDecay = 0.0005,
   learningRateDecay = 1e-7,
   max_classes = 10,
-  scenario = 'orig',                                                 -- possible options: 'gen', 'orig'
+  scenario = 'gen',                                                 -- possible options: 'gen', 'orig'
   nb_runs = 10,                                                      -- number of independent runs of the algorithm
-  gen_percentage = {0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1},   -- amount of data generated per class, fraction from the stream data size
+  --gen_percentage = {0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1},   -- amount of data generated per class, fraction from the stream data size
+  gen_percentage = {1},
+--  folder_names = {'s1', 's07', 's04', 's02', 's01', 's005', 's002', 's001'},
+  folder_names = {'s04'}
 }
-  
-  
+
+--opt.dataset = 'mnist'
+
 local function normalize_images(dataset)
   dataset.data = dataset.data:float()
   dataset.data = dataset.data:div(255/2)
@@ -83,13 +90,21 @@ local function load_data(opt)
     data.trainData.data = data.trainData.data:float()
   elseif opt.scenario == 'gen' then
     -- Generated data scenario
-    data.trainData = generate_from_models_set(opt.dataset, opt.gen_per_class) --???????????????????????????? change parameters
+    opt.gen_per_class = opt.gen_percentage[1]*6000
+    data.trainData = generate_from_models_set(opt)
   else
     error('Unknown scenario')
   end
   local d_mean = data.trainData.data:mean(); local d_std = data.trainData.data:std()
-  data.testData = torch.load('data/' .. opt.dataset ..'/original_data/t7/test.t7', opt.data_format or nil)
-  data.testData = normalize_images(data.testData)
+  if opt.testing == 'orig' then
+    data.testData = torch.load('data/' .. opt.dataset ..'/original_data/t7/test.t7', opt.data_format or nil)
+    data.testData = normalize_images(data.testData)
+  elseif opt.testing == 'gen' then
+    opt.gen_per_class = opt.gen_per_class/6
+    data.testData = generate_from_models_set(opt)
+  else
+    error('Wrong test data type provided')
+  end
   -- -- Getting close to gaussian distribution
   data.trainData = normalize_gauss(data.trainData)
   data.testData = normalize_gauss(data.testData, d_mean, d_std)
@@ -148,6 +163,7 @@ function test(model, testData, optimState, opt)
   confusion = optim.ConfusionMatrix(opt.max_classes)
   model:evaluate()
   local bs = 100
+  local targets = cast(torch.zeros(bs))
   print(c.blue '==>'.." testing")
   for i=1, testData.data:size(1),bs do
     local ids = torch.range(i, math.min(i+bs-1, testData.data:size(1))):long()
@@ -163,7 +179,7 @@ end
     
 local function save_results(accuracies, opt)
   if opt.scenario == 'gen' then
-    filename = 'results/static_gen_' .. opt.gen_per_class .. '_nbRuns_' .. opt.nb_runs ..'.t7'
+    filename = 'results/multi_gen/static_gen_' .. opt.gen_name .. '_nbRuns_' .. opt.nb_runs ..'.t7'
   else
     filename = 'results/static_' .. opt.scenario .. '_nbRuns_' .. opt.nb_runs ..'.t7'
   end
@@ -186,29 +202,32 @@ architectures = {--Classification architecture
     {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
     {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
     {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
-    {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
+    {type = 'lin', act = nn.LogSoftMax(), out_size = opt.max_classes}
   },
   cModelTiny = {
     opt.data_size,
-    {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {2, 2}, bn = false, act = nn.ReLU(true), dropout = 0.2, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
-    {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
-    {type = 'lin', act = nn.LogSoftMax(), out_size = 10}
+    {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {3, 3}, bn = false, act = nn.ReLU(true)},
+    {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = false, dropout = 0.5},
+    {type = 'lin', act = nn.LogSoftMax(), out_size = opt.max_classes}
   }
 }
   
-print('Will save at '..opt.save)
+
 paths.mkdir(opt.save)
 local accuracies = torch.zeros(opt.max_epoch, opt.N_gen, opt.nb_runs)
 
 for idx_run = 1, opt.nb_runs do 
-  for idx_gen = 1, opt.N_gen do
+--  for idx_gen = 1, opt.N_gen do
+  for idx_gen = 1, table.getn(opt.folder_names) do
+    local idx_gen1 = 1
+    opt.gen_name = opt.folder_names[idx_gen]
+    opt.gen_name = opt.gen_name[1]
+    opt.models_folder = opt.models_folder_init .. opt.folder_names[idx_gen] .. '/'
     local data = load_data(opt); print(c.blue '==>' ..' LOADING DATA');
-    local model = cast(initialize_model(architectures.cModel)); print(c.blue '==>' ..' LOADING MODEL'); print(model)
-    local optimState = initialize_run_parameters(opt, idx_gen); epoch = 1; print(c.blue '==>' ..' INITIALIZING PARAMETERS');
-    
+    local model = cast(initialize_model(architectures.cModelTiny)); print(c.blue '==>' ..' LOADING MODEL'); print(model)
+    local optimState = initialize_run_parameters(opt, idx_gen1); epoch = 1; print(c.blue '==>' ..' INITIALIZING PARAMETERS');
     params = {}; params.parameters, params.gradParameters = model:getParameters()
     criterion = cast(nn.ClassNLLCriterion())
-
     for i=1,opt.max_epoch do
       train(model, data.trainData, params, optimState, opt)
       accuracies[epoch][idx_gen][idx_run] = test(model, data.testData, optimState, opt)
