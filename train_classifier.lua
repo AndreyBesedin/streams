@@ -26,19 +26,20 @@ opt = {
   models_folder_init = '/home/abesedin/workspace/Projects/streams/models/pretrained_generative_models/mnist_by_train_size/',
   batchSize = 100,
   save = 'logs/',
-  max_epoch = 100,
+  max_epoch = 15,
   epoch_step = 20,
   learningRate = 0.01,
   momentum = 0.9,
   weightDecay = 0.0005,
-  learningRateDecay = 1e-7,
+  learningRateDecay = 1e-4,
   max_classes = 10,
   scenario = 'gen',                                                 -- possible options: 'gen', 'orig'
-  nb_runs = 10,                                                      -- number of independent runs of the algorithm
+  nb_runs = 3,                                                      -- number of independent runs of the algorithm
   --gen_percentage = {0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1},   -- amount of data generated per class, fraction from the stream data size
-  gen_percentage = {1},
+  gen_percentage = {0.1},
 --  folder_names = {'s1', 's07', 's04', 's02', 's01', 's005', 's002', 's001'},
-  folder_names = {'s04'}
+  folder_names = {'s001', 's002', 's005', 's01', 's02', 's04', 's07', 's1'},
+--  folder_names = {'s001'}
 }
 
 --opt.dataset = 'mnist'
@@ -179,7 +180,7 @@ end
     
 local function save_results(accuracies, opt)
   if opt.scenario == 'gen' then
-    filename = 'results/multi_gen/static_gen_' .. opt.gen_name .. '_nbRuns_' .. opt.nb_runs ..'.t7'
+    filename = 'results/multi_gen/static_gen_' .. opt.N .. 'sizes_nbRuns_' .. opt.nb_runs ..'.t7'
   else
     filename = 'results/static_' .. opt.scenario .. '_nbRuns_' .. opt.nb_runs ..'.t7'
   end
@@ -195,9 +196,10 @@ if opt.scenario == 'gen' then opt.N_gen = table.getn(opt.gen_percentage) else op
 if opt.dataset == 'mnist' then opt.data_format = 'ascii' end
 
 local architectures = {}; opt.data_size = get_data_size(opt)
+opt.data_size_init = get_data_size(opt)
 architectures = {--Classification architecture
   cModel = {
-    opt.data_size,
+    opt.data_size_init,
     {type = 'conv2D', outPlanes = 16, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
     {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
     {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
@@ -205,7 +207,7 @@ architectures = {--Classification architecture
     {type = 'lin', act = nn.LogSoftMax(), out_size = opt.max_classes}
   },
   cModelTiny = {
-    opt.data_size,
+    opt.data_size_init,
     {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {3, 3}, bn = false, act = nn.ReLU(true)},
     {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = false, dropout = 0.5},
     {type = 'lin', act = nn.LogSoftMax(), out_size = opt.max_classes}
@@ -214,14 +216,32 @@ architectures = {--Classification architecture
   
 
 paths.mkdir(opt.save)
-local accuracies = torch.zeros(opt.max_epoch, opt.N_gen, opt.nb_runs)
-
+opt.N = table.getn(opt.folder_names)
+local accuracies = torch.zeros(opt.max_epoch, opt.N, opt.nb_runs)
 for idx_run = 1, opt.nb_runs do 
 --  for idx_gen = 1, opt.N_gen do
-  for idx_gen = 1, table.getn(opt.folder_names) do
+  for idx_gen = 1, opt.N do
+    local architectures = {}; opt.data_size = get_data_size(opt)
+    opt.data_size_init = get_data_size(opt)
+    architectures = {--Classification architecture
+      cModel = {
+        opt.data_size_init,
+        {type = 'conv2D', outPlanes = 16, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+        {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3, pooling = {module = nn.SpatialMaxPooling, params = {2,2,2,2}}},
+        {type = 'conv2D', outPlanes = 32, ker_size = {3, 3}, step = {1, 1}, bn = true, act = nn.ReLU(true), dropout = 0.3},
+        {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = true, dropout = 0.5},
+        {type = 'lin', act = nn.LogSoftMax(), out_size = opt.max_classes}
+      },
+      cModelTiny = {
+        opt.data_size_init,
+        {type = 'conv2D', outPlanes = 16, ker_size = {4, 4}, step = {3, 3}, bn = false, act = nn.ReLU(true)},
+        {type = 'lin', act = nn.ReLU(true),   out_size = 256, bn = false, dropout = 0.5},
+        {type = 'lin', act = nn.LogSoftMax(), out_size = opt.max_classes}
+      }
+    }
     local idx_gen1 = 1
     opt.gen_name = opt.folder_names[idx_gen]
-    opt.gen_name = opt.gen_name[1]
+    --opt.gen_name = opt.gen_name[1]
     opt.models_folder = opt.models_folder_init .. opt.folder_names[idx_gen] .. '/'
     local data = load_data(opt); print(c.blue '==>' ..' LOADING DATA');
     local model = cast(initialize_model(architectures.cModelTiny)); print(c.blue '==>' ..' LOADING MODEL'); print(model)
@@ -230,7 +250,7 @@ for idx_run = 1, opt.nb_runs do
     criterion = cast(nn.ClassNLLCriterion())
     for i=1,opt.max_epoch do
       train(model, data.trainData, params, optimState, opt)
-      accuracies[epoch][idx_gen][idx_run] = test(model, data.testData, optimState, opt)
+      accuracies[i][idx_gen][idx_run] = test(model, data.testData, optimState, opt)
     end
     save_results(accuracies, opt)
   end
